@@ -229,7 +229,7 @@ function render(dt, t) {
     .addScaledVector(f, -8.5 - Math.abs(st.v) * 0.05)
     .setY(3.1 + (Math.random() - 0.5) * 0.15 * st.shake);
   camera.lookAt(car.root.position.clone().addScaledVector(f, 7).setY(1.1));
-  const fov = (camera.aspect < 1 ? 70 : 58) + Math.abs(st.v) * 0.3;
+  const fov = 58 + Math.abs(st.v) * 0.3;
   if (Math.abs(camera.fov - fov) > 0.01) {
     camera.fov = fov;
     camera.updateProjectionMatrix();
@@ -250,6 +250,8 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 setTimeout(() => ($('toast').hidden = true), 6000);
+// Landscape only. Locking works in installed PWAs / fullscreen on Android; elsewhere a CSS overlay asks to rotate.
+screen.orientation?.lock?.('landscape')?.catch(() => {});
 
 let last = 0;
 renderer.setAnimationLoop((ms) => {

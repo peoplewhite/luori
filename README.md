@@ -9,6 +9,8 @@ npm install
 npm run dev        # http://localhost:5173 (also exposed on LAN for phone testing)
 ```
 
+Landscape only: the manifest locks installed PWAs to landscape, and a portrait phone browser shows a "rotate your device" overlay.
+
 Controls: `W/↑` throttle, `S/↓` brake (hold at standstill to reverse), `A D / ← →` steer. On touch devices on-screen buttons appear.
 
 Scene modes (icons top-right, last choice saved in `localStorage`):

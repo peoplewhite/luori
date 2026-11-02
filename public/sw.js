@@ -1,5 +1,5 @@
 // Offline cache: precache the built page + every asset it references, network-first for the page itself.
-const CACHE = 'luori-v1';
+const CACHE = 'luori-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(

@@ -48,6 +48,10 @@
       #pad button.on { background: rgba(255, 246, 236, 0.95); transform: scale(0.94); }
       #pad button.gas.on { background: rgba(224, 122, 95, 0.95); }
       @media (pointer: coarse) { #pad { display: flex; } #toast .kb { display: none; } #toast .tc { display: inline; } }
+      #rotate { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+        background: #4a3b36; color: #fff6ec; font-size: 18px; touch-action: none; }
+      #rotate svg { width: 72px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+      @media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
     </style>
   </head>
   <body>
@@ -69,6 +73,7 @@
       <div class="grp"><button data-k="left" aria-label="左轉">◀</button><button data-k="right" aria-label="右轉">▶</button></div>
       <div class="grp"><button data-k="down" class="brk" aria-label="煞車／倒車">煞車</button><button data-k="up" class="gas" aria-label="油門">油門</button></div>
     </div>
+    <div id="rotate"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M2.5 15a9.5 9.5 0 0 0 4.5 6M21.5 9A9.5 9.5 0 0 0 17 3" /></svg>請將裝置轉為橫向</div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
