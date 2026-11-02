@@ -73,25 +73,29 @@ function leader(c, lat, all) {
   return best;
 }
 
+/** One driving step for an AI car (or the player on autopilot): `c` needs { s, lat, v, lane, cruise, latV }. */
+export function drive(c, all, dt) {
+  const lead = leader(c, c.lat, all);
+  const target = lead.d < 90 ? Math.min(c.cruise, lead.v + (lead.d - 14) * 0.25) : c.cruise; // settle ~14 m behind
+  c.v = Math.max(0, c.v + clamp(target - c.v, -8 * dt, 2 * dt));
+
+  // Held up and settled in lane: try the passing lane (left) first, then right.
+  // A lane another car is already moving into counts as taken, so two cars never merge into the same gap.
+  if (lead.d < 45 && lead.v < c.cruise - 2 && Math.abs(c.lat - laneLat(c.lane)) < 0.1) {
+    const free = (lane) =>
+      lane >= 0 && lane <= 2 &&
+      all.every((o) => o === c || (Math.abs(o.lat - laneLat(lane)) > 2.4 && o.lane !== lane) || gap(c.s, o.s) < -20 || gap(c.s, o.s) > 35);
+    c.lane = [c.lane - 1, c.lane + 1].find(free) ?? c.lane;
+  }
+  c.latV = clamp(laneLat(c.lane) - c.lat, -1, 1) * 1.2;
+  c.lat += c.latV * dt;
+  c.s = (c.s + c.v * dt) % LOOP;
+}
+
 /** `player` needs { s, lat, v }; it is treated as just another obstacle. */
 export function updateTraffic(cars, player, dt) {
   const all = [...cars, player];
-  for (const c of cars) {
-    const lead = leader(c, c.lat, all);
-    const target = lead.d < 90 ? Math.min(c.cruise, lead.v + (lead.d - 14) * 0.25) : c.cruise; // settle ~14 m behind
-    c.v = Math.max(0, c.v + clamp(target - c.v, -8 * dt, 2 * dt));
-
-    // Held up and settled in lane: try the passing lane (left) first, then right.
-    if (lead.d < 45 && lead.v < c.cruise - 2 && Math.abs(c.lat - laneLat(c.lane)) < 0.1) {
-      const free = (lane) =>
-        lane >= 0 && lane <= 2 &&
-        all.every((o) => o === c || Math.abs(o.lat - laneLat(lane)) > 2.4 || gap(c.s, o.s) < -20 || gap(c.s, o.s) > 35);
-      c.lane = [c.lane - 1, c.lane + 1].find(free) ?? c.lane;
-    }
-    c.latV = clamp(laneLat(c.lane) - c.lat, -1, 1) * 1.2;
-    c.lat += c.latV * dt;
-    c.s = (c.s + c.v * dt) % LOOP;
-  }
+  for (const c of cars) drive(c, all, dt);
 }
 
 export function renderTraffic(cars) {

@@ -28,6 +28,12 @@
       #mode { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card); pointer-events: auto; }
       #mode button { width: 40px; height: 40px; border: 0; border-radius: 50%; padding: 9px; background: none; color: var(--ink); opacity: 0.55; }
       #mode button[aria-pressed="true"] { background: var(--accent); color: #fff; opacity: 1; }
+      #mode i { width: 1px; margin: 8px 2px; background: currentColor; opacity: 0.2; }
+      #hud .box, #pad, #mode { transition: opacity 0.8s; }
+      .auto #hud .box, .auto #pad { opacity: 0.2; }
+      .auto #mode { opacity: 0.45; }
+      .auto #mode:hover { opacity: 1; }
+      .auto #toast { display: none; }
       #mode svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
       #toast { position: fixed; top: 24%; left: 50%; transform: translateX(-50%); background: var(--card);
         padding: 10px 20px; border-radius: 999px; font-size: 16px; white-space: nowrap; pointer-events: none; }
@@ -53,6 +59,8 @@
         <div id="mode">
           <button data-mode="sunset" aria-label="落日模式" title="落日模式"><svg viewBox="0 0 24 24"><path d="M6 17a6 6 0 0 1 12 0M2 17h20M5 21h14M12 5v3M4.2 9.2l2 2M19.8 9.2l-2 2" /></svg></button>
           <button data-mode="real" aria-label="現實模式（依台灣時間）" title="現實模式（依台灣時間）"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg></button>
+          <i></i>
+          <button id="auto" aria-pressed="false" aria-label="自動駕駛" title="自動駕駛（任何按鍵或觸控即交還控制）"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2.5" /><path d="M3.2 10.8 9.6 11.6M20.8 10.8 14.4 11.6M12 14.5V21" /></svg></button>
         </div>
       </div>
     </div>

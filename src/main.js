@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { buildWorld, sample, worldAt, curvature, gap, LANE } from './road.js';
-import { makeCar, createTraffic, updateTraffic, renderTraffic, parts, CAR_L, CAR_W } from './traffic.js';
+import { makeCar, createTraffic, updateTraffic, renderTraffic, drive, parts, CAR_L, CAR_W } from './traffic.js';
 import { themeFor } from './theme.js';
 
 // Arcade tuning (metres, seconds)
 const VMAX = 110 / 3.6, VREV = -6, ACC = 3.2, BRAKE = 9, REV_ACC = 2.5, DRAG = 0.5;
 const LAT_MIN = -5.45, LAT_MAX = 7.85; // car centre limits between median barrier and guardrail
-const ALIGN = 1.6, TRAFFIC = 64;
+const ALIGN = 1.6, TRAFFIC = 64, AUTO_V = 100 / 3.6;
 
 const $ = (id) => document.getElementById(id);
 const { clamp } = THREE.MathUtils;
@@ -82,7 +82,10 @@ setInterval(() => applyTheme(themeFor(mode)), 60000); // real mode flips day/nig
 // --- Input
 const keys = { up: false, down: false, left: false, right: false };
 const KEYMAP = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right' };
+// Autopilot: any real input hands control back. Modifier keys alone (e.g. Cmd+Tab away) don't count.
+const MODIFIERS = ['Meta', 'Control', 'Alt', 'Shift'];
 addEventListener('keydown', (e) => {
+  if (auto && !MODIFIERS.includes(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) setAuto(false);
   if (KEYMAP[e.code]) {
     keys[KEYMAP[e.code]] = true;
     e.preventDefault();
@@ -99,10 +102,25 @@ for (const b of document.querySelectorAll('[data-k]')) {
   b.addEventListener('pointerdown', set(true));
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, set(false));
 }
+addEventListener('pointerdown', (e) => auto && !e.target.closest('#mode') && setAuto(false), true);
 
 // --- State
 const st = { s: 0, lat: LANE, psi: 0, v: 0, steer: 0, odo: 0, spin: 0, shake: 0, camH: sample(0).th, roll: { x: 0, v: 0 }, pitch: { x: 0, v: 0 } };
 const traffic = createTraffic(scene, TRAFFIC, st.s);
+
+let auto = false;
+function setAuto(on) {
+  auto = on;
+  $('auto').setAttribute('aria-pressed', on);
+  document.body.classList.toggle('auto', on);
+  // On autopilot the player runs the same driver as the AI cars; off again, drop the lane claim others respect.
+  if (on) Object.assign(st, { lane: clamp(Math.round(st.lat / LANE) + 1, 0, 2), cruise: AUTO_V, latV: 0 });
+  else st.lane = null;
+}
+$('auto').addEventListener('click', () => {
+  setAuto(!auto);
+  $('auto').blur();
+});
 
 // Slightly under-damped spring, gives the body a soft wobble.
 function spring(o, target, dt) {
@@ -111,6 +129,27 @@ function spring(o, target, dt) {
 }
 
 function update(dt) {
+  const [a, yaw] = auto ? autoStep(dt) : manualStep(dt);
+  updateTraffic(traffic, st, dt);
+  bumpTraffic();
+
+  st.shake = Math.max(0, st.shake - dt * 3);
+  spring(st.roll, clamp(st.v * yaw * 0.012, -0.05, 0.05), dt);
+  spring(st.pitch, clamp(a * 0.005, -0.04, 0.04), dt);
+  st.spin += (st.v * dt) / 0.34;
+}
+
+// Returns [acceleration, steering yaw rate] for the body sway springs.
+function autoStep(dt) {
+  const { v, psi } = st;
+  drive(st, [...traffic, st], dt);
+  st.odo += st.v * dt;
+  st.psi = Math.atan2(st.latV, Math.max(st.v, 1));
+  st.steer = st.latV * 0.5;
+  return dt ? [(st.v - v) / dt, (st.psi - psi) / dt] : [0, 0];
+}
+
+function manualStep(dt) {
   const { up, down } = keys;
   const steerIn = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
   const v = st.v;
@@ -142,22 +181,17 @@ function update(dt) {
     st.v *= 1 - 0.4 * dt; // gentle scrape, not a punishment
     st.shake = Math.min(1, Math.abs(st.v) / 10);
   }
-
-  updateTraffic(traffic, st, dt);
-  bumpTraffic();
-
-  st.shake = Math.max(0, st.shake - dt * 3);
-  spring(st.roll, clamp(st.v * yaw * 0.012, -0.05, 0.05), dt);
-  spring(st.pitch, clamp(a * 0.005, -0.04, 0.04), dt);
-  st.spin += (st.v * dt) / 0.34;
+  return [a, yaw];
 }
 
 // Arcade contact: no crashes, just push apart and bleed speed.
+let bumps = 0;
 function bumpTraffic() {
   for (const c of traffic) {
     const ds = gap(st.s, c.s), dl = c.lat - st.lat;
     const ps = CAR_L - Math.abs(ds), pl = CAR_W + 0.1 - Math.abs(dl);
     if (ps <= 0 || pl <= 0) continue;
+    bumps++;
     if (pl < ps) {
       st.lat -= Math.sign(dl) * pl; // side swipe
       st.psi *= 0.5;
@@ -226,7 +260,13 @@ renderer.setAnimationLoop((ms) => {
   hud();
 });
 
-// Read-only handle for headless verification.
-window.__luori = { get gpu() { return { ...renderer.info.memory }; }, get theme() { return { mode, night: theme.night, fog: theme.fog[0] }; }, get state() { return { ...st, traffic: traffic.map(({ s, lat, v }) => ({ s, lat, v })) }; } };
+// Handle for headless verification; step() runs the simulation without rendering.
+window.__luori = {
+  bumps: () => bumps,
+  setAuto,
+  step(sec, dt = 1 / 60) {
+    for (let i = 0; i < sec / dt; i++) update(dt);
+  },
+  get gpu() { return { ...renderer.info.memory }; }, get theme() { return { mode, night: theme.night, fog: theme.fog[0] }; }, get state() { return { ...st, traffic: traffic.map(({ s, lat, v }) => ({ s, lat, v })) }; } };
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');

@@ -18,6 +18,8 @@ Scene modes (icons top-right, last choice saved in `localStorage`):
 
 For testing real mode, `?t=day` or `?t=night` fakes the Taiwan clock.
 
+Autopilot (steering-wheel icon, top-right) drives on its own with the same driver as the AI traffic: cruises at 100 km/h, follows, overtakes, takes the bends. Any key or touch (modifier keys alone excepted) hands control back. It combines freely with either scene mode, and the HUD fades while it runs.
+
 ## Build
 
 ```bash
@@ -41,7 +43,7 @@ Service workers need HTTPS (or `localhost`). When changing `public/sw.js` behavi
 ## Layout
 
 - `src/road.js` – closed-loop road curve (arc-length sampled), scenery, signs, street lamps, sky/mountains/stars
-- `src/traffic.js` – low-poly sedan model, AI traffic (car following + overtaking)
+- `src/traffic.js` – low-poly sedan model, AI driver (car following + overtaking) used by traffic and autopilot
 - `src/theme.js` – sunset / day / night palettes and the Taiwan-time rule
 - `src/main.js` – player car, arcade driving model, collisions, chase camera, HUD, scene mode switch
 - `public/` – manifest, service worker, icons
