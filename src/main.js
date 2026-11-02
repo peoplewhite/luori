@@ -105,7 +105,7 @@ for (const b of document.querySelectorAll('[data-k]')) {
 addEventListener('pointerdown', (e) => auto && !e.target.closest('#mode') && setAuto(false), true);
 
 // --- State
-const st = { s: 0, lat: LANE, psi: 0, v: 0, steer: 0, odo: 0, spin: 0, shake: 0, camH: sample(0).th, roll: { x: 0, v: 0 }, pitch: { x: 0, v: 0 } };
+const st = { s: 0, lat: LANE, psi: 0, v: 0, steer: 0, spin: 0, shake: 0, camH: sample(0).th, roll: { x: 0, v: 0 }, pitch: { x: 0, v: 0 } };
 const traffic = createTraffic(scene, TRAFFIC, st.s);
 
 let auto = false;
@@ -143,7 +143,6 @@ function update(dt) {
 function autoStep(dt) {
   const { v, psi } = st;
   drive(st, [...traffic, st], dt);
-  st.odo += st.v * dt;
   st.psi = Math.atan2(st.latV, Math.max(st.v, 1));
   st.steer = st.latV * 0.5;
   return dt ? [(st.v - v) / dt, (st.psi - psi) / dt] : [0, 0];
@@ -173,7 +172,6 @@ function manualStep(dt) {
   if (!steerIn) st.psi -= st.psi * Math.min(1, ALIGN * dt) * Math.min(1, Math.abs(st.v) / 5);
   st.psi = clamp(st.psi, -0.35, 0.35);
   st.s += sDot * dt;
-  st.odo += Math.abs(sDot) * dt;
   st.lat += st.v * Math.sin(st.psi) * dt;
   if (st.lat < LAT_MIN || st.lat > LAT_MAX) {
     st.lat = clamp(st.lat, LAT_MIN, LAT_MAX);
@@ -237,11 +235,6 @@ function render(dt, t) {
   renderer.render(scene, camera);
 }
 
-function hud() {
-  $('spd').textContent = Math.round(Math.abs(st.v) * 3.6);
-  $('odo').textContent = (st.odo / 1000).toFixed(1);
-}
-
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
@@ -249,7 +242,6 @@ function resize() {
 }
 addEventListener('resize', resize);
 resize();
-setTimeout(() => ($('toast').hidden = true), 6000);
 // Landscape only. Locking works in installed PWAs / fullscreen on Android; elsewhere a CSS overlay asks to rotate.
 screen.orientation?.lock?.('landscape')?.catch(() => {});
 
@@ -259,7 +251,6 @@ renderer.setAnimationLoop((ms) => {
   last = t;
   update(dt);
   render(dt, t);
-  hud();
 });
 
 // Handle for headless verification; step() runs the simulation without rendering.

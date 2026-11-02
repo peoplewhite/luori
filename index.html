@@ -17,26 +17,21 @@
         font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
         user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
       canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; }
-      [hidden] { display: none !important; }
-      .box { background: var(--card); border-radius: 14px; padding: 8px 14px; display: flex; flex-direction: column; min-width: 92px; }
-      .box b { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-      .box small { font-size: 12px; opacity: 0.7; }
-      #hud { position: fixed; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left));
-        right: calc(12px + env(safe-area-inset-right)); display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
-      #hud .r { text-align: right; }
-      .rt { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-      #mode { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card); pointer-events: auto; }
+      #mode { position: fixed; top: calc(12px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right));
+        display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card); }
       #mode button { width: 40px; height: 40px; border: 0; border-radius: 50%; padding: 9px; background: none; color: var(--ink); opacity: 0.55; }
       #mode button[aria-pressed="true"] { background: var(--accent); color: #fff; opacity: 1; }
       #mode i { width: 1px; margin: 8px 2px; background: currentColor; opacity: 0.2; }
-      #hud .box, #pad, #mode { transition: opacity 0.8s; }
-      .auto #hud .box, .auto #pad { opacity: 0.2; }
+      #pad, #mode { transition: opacity 0.8s; }
+      .auto #pad { opacity: 0.2; }
       .auto #mode { opacity: 0.45; }
       .auto #mode:hover { opacity: 1; }
       .auto #toast { display: none; }
       #mode svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
       #toast { position: fixed; top: 24%; left: 50%; transform: translateX(-50%); background: var(--card);
-        padding: 10px 20px; border-radius: 999px; font-size: 16px; white-space: nowrap; pointer-events: none; }
+        padding: 10px 20px; border-radius: 999px; font-size: 16px; white-space: nowrap; pointer-events: none;
+        animation: fade-out 1s 5s forwards; }
+      @keyframes fade-out { to { opacity: 0; visibility: hidden; } }
       #toast .tc { display: none; }
       #pad { position: fixed; left: 0; right: 0; bottom: 0; display: none; justify-content: space-between; align-items: flex-end;
         padding: 0 calc(16px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); pointer-events: none; }
@@ -56,17 +51,11 @@
   </head>
   <body>
     <canvas id="c"></canvas>
-    <div id="hud">
-      <div class="box"><b id="spd">0</b><small>km/h</small></div>
-      <div class="rt">
-        <div class="box r"><b id="odo">0.0</b><small>里程 km</small></div>
-        <div id="mode">
-          <button data-mode="sunset" aria-label="落日模式" title="落日模式"><svg viewBox="0 0 24 24"><path d="M6 17a6 6 0 0 1 12 0M2 17h20M5 21h14M12 5v3M4.2 9.2l2 2M19.8 9.2l-2 2" /></svg></button>
-          <button data-mode="real" aria-label="現實模式（依台灣時間）" title="現實模式（依台灣時間）"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg></button>
-          <i></i>
-          <button id="auto" aria-pressed="false" aria-label="自動駕駛" title="自動駕駛（任何按鍵或觸控即交還控制）"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2.5" /><path d="M3.2 10.8 9.6 11.6M20.8 10.8 14.4 11.6M12 14.5V21" /></svg></button>
-        </div>
-      </div>
+    <div id="mode">
+      <button data-mode="sunset" aria-label="落日模式" title="落日模式"><svg viewBox="0 0 24 24"><path d="M6 17a6 6 0 0 1 12 0M2 17h20M5 21h14M12 5v3M4.2 9.2l2 2M19.8 9.2l-2 2" /></svg></button>
+      <button data-mode="real" aria-label="現實模式（依台灣時間）" title="現實模式（依台灣時間）"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg></button>
+      <i></i>
+      <button id="auto" aria-pressed="false" aria-label="自動駕駛" title="自動駕駛（任何按鍵或觸控即交還控制）"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2.5" /><path d="M3.2 10.8 9.6 11.6M20.8 10.8 14.4 11.6M12 14.5V21" /></svg></button>
     </div>
     <div id="toast"><span class="kb">W / ↑ 油門　S / ↓ 煞車・倒車　A D / ← → 轉向</span><span class="tc">按住油門出發，◀ ▶ 換車道</span></div>
     <div id="pad">
