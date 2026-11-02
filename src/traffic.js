@@ -15,7 +15,7 @@ const cabinGeo = new THREE.BoxGeometry(1.6, 0.6, 2.5);
 const roofGeo = new THREE.BoxGeometry(1.62, 0.06, 1.6);
 const lampGeo = new THREE.BoxGeometry(0.42, 0.16, 0.05);
 const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.26, 10).rotateZ(Math.PI / 2);
-const parts = { glass: mat('#53627e'), tyre: mat('#2f2c2c'), head: mat('#fff6dc'), tail: mat('#d64545') };
+export const parts = { glass: mat('#53627e'), tyre: mat('#2f2c2c'), head: mat('#fff6dc'), tail: mat('#d64545') };
 
 /** Returns { root, body, wheels }: `root` is placed on the road, `body` may sway, wheels spin/steer. */
 export function makeCar(color) {

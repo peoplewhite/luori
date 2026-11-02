@@ -4,7 +4,6 @@ import * as THREE from 'three';
 // Lateral offset `lat` is positive to the right. Heading th: forward = (sin th, -cos th) in XZ, right = (cos th, sin th).
 export const LOOP = 7600;
 export const LANE = 3.6;
-export const SUN_DIR = new THREE.Vector3(-0.35, 0.11, -1).normalize();
 
 const STEP = 2;
 const HALF = LOOP / 2;
@@ -149,7 +148,44 @@ function instanced(geo, material, list, place) {
   return m;
 }
 
-export function buildWorld(scene, aniso) {
+/** Builds road + scenery for a theme from theme.js (day or night palette, night adds lamps and stars). */
+// Median lamp posts every 40 m; at night the heads glow and cast a soft fake light pool on the road.
+function addStreetLamps(scene, night, metal) {
+  const list = Array.from({ length: LOOP / 40 }, (_, i) => i * 40 + 20);
+  const at = (lat, y) => (o, s) => {
+    o.position.copy(worldAt(s, lat, y));
+    o.rotation.y = -sample(s).th;
+  };
+  scene.add(instanced(new THREE.BoxGeometry(0.2, 9.2, 0.2), metal, list, at(-6.9, 5.4)));
+  scene.add(instanced(new THREE.BoxGeometry(2.6, 0.14, 0.14), metal, list, at(-5.7, 9.95)));
+  const head = night ? new THREE.MeshBasicMaterial({ color: '#ffe7b8' }) : metal;
+  scene.add(instanced(new THREE.BoxGeometry(1.1, 0.2, 0.45), head, list, at(-4.5, 9.85)));
+  if (!night) return;
+  // shortcut: painted light pools instead of real lights (no cost per lamp); cars are not lit by them.
+  const c = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,206,140,0.9)');
+  grad.addColorStop(1, 'rgba(255,206,140,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const map = new THREE.CanvasTexture(c);
+  map.colorSpace = THREE.SRGBColorSpace;
+  const pool = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false });
+  scene.add(instanced(new THREE.PlaneGeometry(22, 26).rotateX(-Math.PI / 2), pool, list, at(-2, 0.03)));
+}
+
+function stars(rand) {
+  const pos = [];
+  for (let i = 0; i < 700; i++) {
+    const a = rand() * Math.PI * 2, y = 0.08 + rand() ** 0.7 * 0.92, r = Math.sqrt(1 - y * y);
+    pos.push(Math.cos(a) * r * 5000, y * 5000, Math.sin(a) * r * 5000);
+  }
+  const g = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: '#fdf6e3', size: 2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.85, depthWrite: false }));
+}
+
+export function buildWorld(scene, aniso, theme) {
   const rand = rng(7);
 
   // Road surface + barriers
@@ -191,9 +227,11 @@ export function buildWorld(scene, aniso) {
   scene.add(instanced(new THREE.CylinderGeometry(0.18, 0.28, 1.6, 5).translate(0, 0.8, 0), mat('#8a6a4f'), trees.map(({ color, ...t }) => t), placeTree));
   scene.add(instanced(new THREE.IcosahedronGeometry(1.9, 0).translate(0, 3.3, 0), mat('#ffffff'), trees, placeTree));
 
+  if (theme.lamps) addStreetLamps(scene, theme.night, metal);
+
   // Lights
-  scene.add(new THREE.HemisphereLight('#dfe2f5', '#c4a887', 2.3));
-  const sun = new THREE.DirectionalLight('#ffd6ad', 2.6);
+  scene.add(new THREE.HemisphereLight(...theme.hemi));
+  const sun = new THREE.DirectionalLight(...theme.sun);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   Object.assign(sun.shadow.camera, { left: -18, right: 18, top: 18, bottom: -18, near: 1, far: 200 });
@@ -208,7 +246,7 @@ export function buildWorld(scene, aniso) {
   follow.add(ground);
 
   const skyGeo = new THREE.SphereGeometry(5500, 32, 16);
-  const [low, mid, top] = ['#ffd2a2', '#f2aaa2', '#7f90c8'].map((c) => new THREE.Color(c));
+  const [low, mid, top] = theme.sky.map((c) => new THREE.Color(c));
   const cols = [];
   for (let i = 0; i < skyGeo.attributes.position.count; i++) {
     const t = Math.max(0, skyGeo.attributes.position.getY(i) / 5500);
@@ -218,14 +256,16 @@ export function buildWorld(scene, aniso) {
   skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
   follow.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
 
-  for (const [r, color, opacity] of [[420, '#ffc48a', 0.35], [170, '#fff3d6', 1]]) {
+  for (const [r, color, opacity] of theme.discs) {
     const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, fog: false, depthWrite: false }));
-    disc.position.copy(SUN_DIR).multiplyScalar(5000);
+    disc.position.copy(theme.sunDir).multiplyScalar(5000);
     disc.lookAt(0, 0, 0);
     follow.add(disc);
   }
 
-  const mtnCols = ['#c4b3cf', '#d0b6c2', '#b8adcc'].map((c) => new THREE.Color(c));
+  if (theme.night) follow.add(stars(rng(3))); // own seed so the mountains don't move between themes
+
+  const mtnCols = theme.mtn.colors.map((c) => new THREE.Color(c));
   const mtns = Array.from({ length: 46 }, (_, i) => ({
     a: (i / 46) * Math.PI * 2 + rand() * 0.1,
     d: 2600 + rand() * 800,
@@ -234,7 +274,7 @@ export function buildWorld(scene, aniso) {
     color: mtnCols[i % 3],
   }));
   // Emissive haze keeps the shaded faces soft instead of dark.
-  const mtnMat = new THREE.MeshLambertMaterial({ flatShading: true, fog: false, emissive: '#9a86a6', emissiveIntensity: 0.45 });
+  const mtnMat = new THREE.MeshLambertMaterial({ flatShading: true, fog: false, emissive: theme.mtn.emissive, emissiveIntensity: theme.mtn.intensity });
   follow.add(instanced(new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0), mtnMat, mtns, (o, m) => {
     o.position.set(Math.cos(m.a) * m.d, -5, Math.sin(m.a) * m.d);
     o.scale.set(m.r, m.h, m.r);

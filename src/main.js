@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { buildWorld, sample, worldAt, curvature, gap, LANE, SUN_DIR } from './road.js';
-import { makeCar, createTraffic, updateTraffic, renderTraffic, CAR_L, CAR_W } from './traffic.js';
+import { buildWorld, sample, worldAt, curvature, gap, LANE } from './road.js';
+import { makeCar, createTraffic, updateTraffic, renderTraffic, parts, CAR_L, CAR_W } from './traffic.js';
+import { themeFor } from './theme.js';
 
 // Arcade tuning (metres, seconds)
 const VMAX = 110 / 3.6, VREV = -6, ACC = 3.2, BRAKE = 9, REV_ACC = 2.5, DRAG = 0.5;
@@ -14,13 +15,69 @@ const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog('#f6caa6', 150, 1800);
+scene.fog = new THREE.Fog();
 const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 7000);
-const { sun, follow } = buildWorld(scene, renderer.capabilities.getMaxAnisotropy());
-
 const car = makeCar('#e07a5f');
 scene.add(car.root);
-sun.target = car.root;
+// Night: lamps glow on every car; only the player gets a real headlight beam.
+const beam = new THREE.SpotLight('#fff0d2', 60, 80, 0.42, 0.6, 1);
+beam.position.set(0, 1, -2);
+beam.target.position.set(0, 0, -30);
+car.root.add(beam, beam.target);
+
+// --- Scene mode: 'sunset' (default) or 'real' (Taiwan clock). Switching rebuilds the scenery in place.
+const MODE_KEY = 'luori.mode';
+const store = (k, v) => {
+  try {
+    return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v);
+  } catch {
+    return null; // storage blocked (private mode etc.): just don't remember
+  }
+};
+let mode = store(MODE_KEY) === 'real' ? 'real' : 'sunset';
+let theme, world, scenery;
+
+function applyTheme(next) {
+  if (next === theme) return;
+  theme = next;
+  if (scenery) {
+    scene.remove(scenery);
+    scenery.traverse((o) => {
+      o.geometry?.dispose();
+      o.dispose?.(); // lights' shadow maps, instanced buffers
+      for (const m of [o.material].flat()) {
+        m?.map?.dispose();
+        m?.dispose();
+      }
+    });
+  }
+  scenery = new THREE.Group();
+  world = buildWorld(scenery, renderer.capabilities.getMaxAnisotropy(), theme);
+  world.sun.target = car.root;
+  scene.add(scenery);
+  scene.fog.color.set(theme.fog[0]);
+  [scene.fog.near, scene.fog.far] = theme.fog.slice(1);
+  document.body.style.background = theme.fog[0];
+  document.querySelector('meta[name=theme-color]').content = theme.fog[0];
+  parts.head.emissive.set(theme.night ? '#fff1cf' : 0);
+  parts.tail.emissive.set(theme.night ? '#ff3030' : 0);
+  beam.visible = theme.night;
+}
+
+function setMode(m) {
+  mode = m;
+  store(MODE_KEY, m);
+  for (const b of document.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', b.dataset.mode === m);
+  applyTheme(themeFor(m));
+}
+for (const b of document.querySelectorAll('[data-mode]')) {
+  b.addEventListener('click', () => {
+    setMode(b.dataset.mode);
+    b.blur(); // keep focus off the button so driving keys don't show a focus ring or re-trigger it
+  });
+}
+setMode(mode);
+setInterval(() => applyTheme(themeFor(mode)), 60000); // real mode flips day/night at 06:00 / 18:00 Taiwan time
 
 // --- Input
 const keys = { up: false, down: false, left: false, right: false };
@@ -127,8 +184,8 @@ function render(dt, t) {
     if (i < 2) w.rotation.y = -st.steer * 0.45;
   });
   renderTraffic(traffic);
-  follow.position.set(car.root.position.x, 0, car.root.position.z);
-  sun.position.copy(car.root.position).addScaledVector(SUN_DIR, 80);
+  world.follow.position.set(car.root.position.x, 0, car.root.position.z);
+  world.sun.position.copy(car.root.position).addScaledVector(theme.sunDir, 80);
 
   // Chase camera: heading eases toward the car's, distance fixed so speed never drags it away.
   st.camH += (h - st.camH) * (1 - Math.exp(-4 * dt));
@@ -170,6 +227,6 @@ renderer.setAnimationLoop((ms) => {
 });
 
 // Read-only handle for headless verification.
-window.__luori = { get state() { return { ...st, traffic: traffic.map(({ s, lat, v }) => ({ s, lat, v })) }; } };
+window.__luori = { get gpu() { return { ...renderer.info.memory }; }, get theme() { return { mode, night: theme.night, fog: theme.fog[0] }; }, get state() { return { ...st, traffic: traffic.map(({ s, lat, v }) => ({ s, lat, v })) }; } };
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');

@@ -22,8 +22,13 @@
       .box b { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
       .box small { font-size: 12px; opacity: 0.7; }
       #hud { position: fixed; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left));
-        right: calc(12px + env(safe-area-inset-right)); display: flex; justify-content: space-between; pointer-events: none; }
+        right: calc(12px + env(safe-area-inset-right)); display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
       #hud .r { text-align: right; }
+      .rt { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+      #mode { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card); pointer-events: auto; }
+      #mode button { width: 40px; height: 40px; border: 0; border-radius: 50%; padding: 9px; background: none; color: var(--ink); opacity: 0.55; }
+      #mode button[aria-pressed="true"] { background: var(--accent); color: #fff; opacity: 1; }
+      #mode svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
       #toast { position: fixed; top: 24%; left: 50%; transform: translateX(-50%); background: var(--card);
         padding: 10px 20px; border-radius: 999px; font-size: 16px; white-space: nowrap; pointer-events: none; }
       #toast .tc { display: none; }
@@ -43,7 +48,13 @@
     <canvas id="c"></canvas>
     <div id="hud">
       <div class="box"><b id="spd">0</b><small>km/h</small></div>
-      <div class="box r"><b id="odo">0.0</b><small>里程 km</small></div>
+      <div class="rt">
+        <div class="box r"><b id="odo">0.0</b><small>里程 km</small></div>
+        <div id="mode">
+          <button data-mode="sunset" aria-label="落日模式" title="落日模式"><svg viewBox="0 0 24 24"><path d="M6 17a6 6 0 0 1 12 0M2 17h20M5 21h14M12 5v3M4.2 9.2l2 2M19.8 9.2l-2 2" /></svg></button>
+          <button data-mode="real" aria-label="現實模式（依台灣時間）" title="現實模式（依台灣時間）"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg></button>
+        </div>
+      </div>
     </div>
     <div id="toast"><span class="kb">W / ↑ 油門　S / ↓ 煞車・倒車　A D / ← → 轉向</span><span class="tc">按住油門出發，◀ ▶ 換車道</span></div>
     <div id="pad">
