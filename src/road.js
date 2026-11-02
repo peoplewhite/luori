@@ -256,11 +256,13 @@ export function buildWorld(scene, aniso, theme) {
   skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
   follow.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
 
+  // Sun/moon discs live in their own group that main.js turns with the camera, so they always stay in view.
+  const sky = new THREE.Group();
   for (const [r, color, opacity] of theme.discs) {
     const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, fog: false, depthWrite: false }));
     disc.position.copy(theme.sunDir).multiplyScalar(5000);
     disc.lookAt(0, 0, 0);
-    follow.add(disc);
+    sky.add(disc);
   }
 
   if (theme.night) follow.add(stars(rng(3))); // own seed so the mountains don't move between themes
@@ -282,5 +284,6 @@ export function buildWorld(scene, aniso, theme) {
   }));
   scene.add(follow);
 
-  return { sun, follow };
+  scene.add(sky);
+  return { sun, follow, sky };
 }

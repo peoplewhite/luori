@@ -204,6 +204,7 @@ function bumpTraffic() {
   }
 }
 
+const UP = new THREE.Vector3(0, 1, 0), sunDir = new THREE.Vector3();
 const fwd = (h) => new THREE.Vector3(Math.sin(h), 0, -Math.cos(h));
 function render(dt, t) {
   const h = sample(st.s).th + st.psi;
@@ -217,10 +218,14 @@ function render(dt, t) {
   });
   renderTraffic(traffic);
   world.follow.position.set(car.root.position.x, 0, car.root.position.z);
-  world.sun.position.copy(car.root.position).addScaledVector(theme.sunDir, 80);
 
   // Chase camera: heading eases toward the car's, distance fixed so speed never drags it away.
-  st.camH += (h - st.camH) * (1 - Math.exp(-4 * dt));
+  // Wrap the difference: the road heading jumps by 2π each lap, which would otherwise spin the camera.
+  const dh = h - st.camH;
+  st.camH += Math.atan2(Math.sin(dh), Math.cos(dh)) * (1 - Math.exp(-4 * dt));
+  world.sky.position.copy(world.follow.position);
+  world.sky.rotation.y = -st.camH;
+  world.sun.position.copy(car.root.position).addScaledVector(sunDir.copy(theme.sunDir).applyAxisAngle(UP, -st.camH), 80);
   const f = fwd(st.camH);
   camera.position
     .copy(car.root.position)
@@ -257,8 +262,14 @@ renderer.setAnimationLoop((ms) => {
 window.__luori = {
   bumps: () => bumps,
   setAuto,
-  step(sec, dt = 1 / 60) {
-    for (let i = 0; i < sec / dt; i++) update(dt);
+  step(sec, dt = 1 / 60, draw = false) {
+    for (let i = 0; i < sec / dt; i++) {
+      update(dt);
+      if (draw) render(dt, 0);
+    }
+  },
+  get sunNdc() {
+    return world.sky.children.at(-1).getWorldPosition(new THREE.Vector3()).project(camera);
   },
   get gpu() { return { ...renderer.info.memory }; }, get theme() { return { mode, night: theme.night, fog: theme.fog[0] }; }, get state() { return { ...st, traffic: traffic.map(({ s, lat, v }) => ({ s, lat, v })) }; } };
 

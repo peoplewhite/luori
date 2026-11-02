@@ -4,6 +4,7 @@ import * as THREE from 'three';
 const taipeiHour = (date = new Date()) => (date.getUTCHours() + 8) % 24;
 const isNight = (hour) => hour >= 18 || hour < 6;
 
+// sunDir is relative to the camera (forward = -Z), not the world: the sun keeps its place in the frame through every bend.
 const dir = (x, y, z) => new THREE.Vector3(x, y, z).normalize();
 
 const THEMES = {
@@ -13,7 +14,7 @@ const THEMES = {
     fog: ['#f6caa6', 150, 1800],
     hemi: ['#dfe2f5', '#c4a887', 2.3],
     sun: ['#ffd6ad', 2.6],
-    sunDir: dir(-0.35, 0.11, -1),
+    sunDir: dir(-0.27, 0.14, -1), // ~15° left of centre, just above the ridge
     discs: [[420, '#ffc48a', 0.35], [170, '#fff3d6', 1]], // radius, colour, opacity
     mtn: { colors: ['#c4b3cf', '#d0b6c2', '#b8adcc'], emissive: '#9a86a6', intensity: 0.45 },
   },
@@ -35,7 +36,7 @@ const THEMES = {
     fog: ['#2c3263', 90, 1300],
     hemi: ['#7180c4', '#2b2838', 1.7],
     sun: ['#b8c4ff', 0.9], // moonlight
-    sunDir: dir(0.3, 0.4, -1),
+    sunDir: dir(0.3, 0.3, -1),
     discs: [[260, '#8f9ad0', 0.12], [80, '#f6f1dc', 1]],
     mtn: { colors: ['#3a416f', '#424676', '#353b68'], emissive: '#1f2550', intensity: 0.6 },
   },
