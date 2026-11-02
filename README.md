@@ -11,6 +11,8 @@ npm run dev        # http://localhost:5173 (also exposed on LAN for phone testin
 
 No HUD on screen, just the mode icons top-right; the controls hint fades out after a few seconds.
 
+Installed as a PWA (home screen), the touch buttons are hidden and autopilot is on by default unless the autopilot icon was switched off before; a physical keyboard still takes over.
+
 Landscape only: the manifest locks installed PWAs to landscape, and a portrait phone browser shows a "rotate your device" overlay.
 
 Controls: `W/↑` throttle, `S/↓` brake (hold at standstill to reverse), `A D / ← →` steer. On touch devices on-screen buttons appear.

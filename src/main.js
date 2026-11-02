@@ -102,7 +102,10 @@ for (const b of document.querySelectorAll('[data-k]')) {
   b.addEventListener('pointerdown', set(true));
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, set(false));
 }
-addEventListener('pointerdown', (e) => auto && !e.target.closest('#mode') && setAuto(false), true);
+// Installed PWA (home screen): no touch pad, autopilot by default, and only a real keyboard takes over.
+const PWA = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true;
+document.documentElement.classList.toggle('pwa', PWA);
+addEventListener('pointerdown', (e) => auto && !PWA && !e.target.closest('#mode') && setAuto(false), true);
 
 // --- State
 const st = { s: 0, lat: LANE, psi: 0, v: 0, steer: 0, spin: 0, shake: 0, camH: sample(0).th, roll: { x: 0, v: 0 }, pitch: { x: 0, v: 0 } };
@@ -117,10 +120,13 @@ function setAuto(on) {
   if (on) Object.assign(st, { lane: clamp(Math.round(st.lat / LANE) + 1, 0, 2), cruise: AUTO_V, latV: 0 });
   else st.lane = null;
 }
+const AUTO_KEY = 'luori.auto';
 $('auto').addEventListener('click', () => {
   setAuto(!auto);
+  store(AUTO_KEY, auto ? '1' : '0'); // only an explicit icon choice is remembered
   $('auto').blur();
 });
+setAuto((store(AUTO_KEY) ?? (PWA ? '1' : '0')) === '1');
 
 // Slightly under-damped spring, gives the body a soft wobble.
 function spring(o, target, dt) {
