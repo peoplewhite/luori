@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+    <title>落日</title>
+    <meta name="theme-color" content="#f3b38a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
+    <style>:root{--ink:#4a3b36;--card:#fff6ecdb;--accent:#e07a5f}*{box-sizing:border-box}html,body{height:100%;color:var(--ink);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none;background:#f6caa6;margin:0;font-family:PingFang TC,Noto Sans TC,Microsoft JhengHei,system-ui,sans-serif;overflow:hidden}canvas{width:100%;height:100%;display:block;position:fixed;inset:0}[hidden]{display:none!important}.box{background:var(--card);border-radius:14px;flex-direction:column;min-width:92px;padding:8px 14px;display:flex}.box b{font-variant-numeric:tabular-nums;font-size:28px;line-height:1.1}.box small{opacity:.7;font-size:12px}#hud{top:calc(12px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));right:calc(12px + env(safe-area-inset-right));pointer-events:none;justify-content:space-between;display:flex;position:fixed}#hud .r{text-align:right}#toast{background:var(--card);white-space:nowrap;pointer-events:none;border-radius:999px;padding:10px 20px;font-size:16px;position:fixed;top:24%;left:50%;transform:translate(-50%)}#toast .tc{display:none}#pad{padding:0 calc(16px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));pointer-events:none;justify-content:space-between;align-items:flex-end;display:none;position:fixed;bottom:0;left:0;right:0}#pad .grp{pointer-events:auto;gap:14px;display:flex}#pad button{width:76px;height:76px;font:inherit;color:var(--ink);touch-action:none;background:#fff6ec99;border:0;border-radius:50%;font-size:22px}#pad button.gas{color:#fff;background:#e07a5f8c;border-radius:38px;height:108px}#pad button.brk{font-size:17px}#pad button.on{background:#fff6ecf2;transform:scale(.94)}#pad button.gas.on{background:#e07a5ff2}@media (pointer:coarse){#pad{display:flex}#toast .kb{display:none}#toast .tc{display:inline}}</style>
+    <script type="module" crossorigin src="./assets/index-CJFpjLPX.js"></script>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="hud">
+      <div class="box"><b id="spd">0</b><small>km/h</small></div>
+      <div class="box r"><b id="odo">0.0</b><small>里程 km</small></div>
+    </div>
+    <div id="toast"><span class="kb">W / ↑ 油門　S / ↓ 煞車・倒車　A D / ← → 轉向</span><span class="tc">按住油門出發，◀ ▶ 換車道</span></div>
+    <div id="pad">
+      <div class="grp"><button data-k="left" aria-label="左轉">◀</button><button data-k="right" aria-label="右轉">▶</button></div>
+      <div class="grp"><button data-k="down" class="brk" aria-label="煞車／倒車">煞車</button><button data-k="up" class="gas" aria-label="油門">油門</button></div>
+    </div>
+  </body>
+</html>
