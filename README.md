@@ -9,7 +9,9 @@ npm install
 npm run dev        # http://localhost:5173 (also exposed on LAN for phone testing)
 ```
 
-No HUD on screen, just the mode icons top-right; the controls hint fades out after a few seconds.
+No HUD on screen, just small icons top-right that fade after a few idle seconds. A "tap to start" card (with the controls hint) comes first, because mobile browsers only play audio after a tap.
+
+Sound is generated with Web Audio, no audio files: an engine hum and wind that follow the speed, plus crickets at night. The speaker icon mutes it (remembered).
 
 Installed as a PWA (home screen), the touch buttons are hidden and autopilot is on by default unless the autopilot icon was switched off before; a physical keyboard still takes over.
 
@@ -50,6 +52,7 @@ Service workers need HTTPS (or `localhost`). When changing `public/sw.js` behavi
 
 - `src/road.js` – closed-loop road curve (arc-length sampled), scenery, signs, street lamps, sky/mountains/stars
 - `src/traffic.js` – low-poly sedan model, AI driver (car following + overtaking) used by traffic and autopilot
+- `src/audio.js` – procedural engine / wind / cricket sounds
 - `src/theme.js` – sunset / day / night palettes and the Taiwan-time rule
 - `src/main.js` – player car, arcade driving model, collisions, chase camera, scene mode switch
 - `public/` – manifest, service worker, icons

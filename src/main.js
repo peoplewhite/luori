@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { buildWorld, sample, worldAt, curvature, gap, LANE } from './road.js';
 import { makeCar, createTraffic, updateTraffic, renderTraffic, drive, parts, CAR_L, CAR_W } from './traffic.js';
 import { themeFor } from './theme.js';
+import { sound, updateAudio, audioDebug } from './audio.js';
 
 // Arcade tuning (metres, seconds)
 const VMAX = 110 / 3.6, VREV = -6, ACC = 3.2, BRAKE = 9, REV_ACC = 2.5, DRAG = 0.5;
@@ -73,7 +74,6 @@ function setMode(m) {
 for (const b of document.querySelectorAll('[data-mode]')) {
   b.addEventListener('click', () => {
     setMode(b.dataset.mode);
-    b.blur(); // keep focus off the button so driving keys don't show a focus ring or re-trigger it
   });
 }
 setMode(mode);
@@ -85,6 +85,7 @@ const KEYMAP = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', Key
 // Autopilot: any real input hands control back. Modifier keys alone (e.g. Cmd+Tab away) don't count.
 const MODIFIERS = ['Meta', 'Control', 'Alt', 'Shift'];
 addEventListener('keydown', (e) => {
+  begin();
   if (auto && !MODIFIERS.includes(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) setAuto(false);
   if (KEYMAP[e.code]) {
     keys[KEYMAP[e.code]] = true;
@@ -105,7 +106,7 @@ for (const b of document.querySelectorAll('[data-k]')) {
 // Installed PWA (home screen): no touch pad, autopilot by default, and only a real keyboard takes over.
 const PWA = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true;
 document.documentElement.classList.toggle('pwa', PWA);
-addEventListener('pointerdown', (e) => auto && !PWA && !e.target.closest('#mode') && setAuto(false), true);
+addEventListener('pointerdown', (e) => auto && !PWA && !e.target.closest('#ui, #start') && setAuto(false), true);
 
 // --- State
 const st = { s: 0, lat: LANE, psi: 0, v: 0, steer: 0, spin: 0, shake: 0, camH: sample(0).th, roll: { x: 0, v: 0 }, pitch: { x: 0, v: 0 } };
@@ -124,9 +125,40 @@ const AUTO_KEY = 'luori.auto';
 $('auto').addEventListener('click', () => {
   setAuto(!auto);
   store(AUTO_KEY, auto ? '1' : '0'); // only an explicit icon choice is remembered
-  $('auto').blur();
 });
 setAuto((store(AUTO_KEY) ?? (PWA ? '1' : '0')) === '1');
+
+// Keep focus off the icons so driving keys don't show a focus ring or re-trigger them.
+$('ui').addEventListener('click', (e) => e.target.closest('button')?.blur());
+// Icons fade after a few idle seconds; any input brings them back.
+let idleTimer;
+function poke() {
+  document.body.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => document.body.classList.add('idle'), 3000);
+}
+for (const ev of ['pointermove', 'pointerdown', 'keydown']) addEventListener(ev, poke, true);
+poke();
+
+// --- Sound: mobile browsers only play audio after a tap, hence the "tap to start" card.
+const SOUND_KEY = 'luori.sound';
+let soundOn = store(SOUND_KEY) !== '0', started = false;
+function begin() {
+  if (started) return;
+  started = true;
+  $('start').remove();
+  sound(soundOn);
+}
+$('start').addEventListener('click', begin);
+$('snd').setAttribute('aria-pressed', soundOn);
+$('snd').addEventListener('click', () => {
+  soundOn = !soundOn;
+  store(SOUND_KEY, soundOn ? '1' : '0');
+  $('snd').setAttribute('aria-pressed', soundOn);
+  if (started) sound(soundOn);
+});
+// iOS interrupts audio when the app is backgrounded; try to pick it up again on return.
+document.addEventListener('visibilitychange', () => started && soundOn && !document.hidden && sound(true));
 
 // Slightly under-damped spring, gives the body a soft wobble.
 function spring(o, target, dt) {
@@ -244,6 +276,7 @@ function render(dt, t) {
     camera.updateProjectionMatrix();
   }
   renderer.render(scene, camera);
+  updateAudio(st.v, theme.night);
 }
 
 function resize() {
@@ -267,6 +300,7 @@ renderer.setAnimationLoop((ms) => {
 // Handle for headless verification; step() runs the simulation without rendering.
 window.__luori = {
   bumps: () => bumps,
+  audio: audioDebug,
   setAuto,
   step(sec, dt = 1 / 60, draw = false) {
     for (let i = 0; i < sec / dt; i++) {
