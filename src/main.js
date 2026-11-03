@@ -166,6 +166,24 @@ $('snd').addEventListener('click', () => {
 // iOS interrupts audio when the app is backgrounded; try to pick it up again on return.
 document.addEventListener('visibilitychange', () => started && soundOn && !document.hidden && sound(true));
 
+// --- Screenshot: render then read the canvas in the same task (toBlob copies it right away),
+// so no preserveDrawingBuffer cost on every frame. Phones get the share sheet ("Save image"), desktops a download.
+const COARSE = matchMedia('(pointer: coarse)').matches;
+$('shot').addEventListener('click', () => {
+  renderer.render(scene, camera);
+  renderer.domElement.toBlob((blob) => {
+    const local = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4);
+    const file = new File([blob], `luori-${local.toISOString().slice(0, 19).replace(/\D/g, '')}.png`, { type: 'image/png' });
+    const download = () => {
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(file), download: file.name });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+    if (COARSE && navigator.canShare?.({ files: [file] })) navigator.share({ files: [file] }).catch((e) => e.name !== 'AbortError' && download());
+    else download();
+  }, 'image/png');
+});
+
 // Slightly under-damped spring, gives the body a soft wobble.
 function spring(o, target, dt) {
   o.v += ((target - o.x) * 40 - o.v * 7) * dt;
