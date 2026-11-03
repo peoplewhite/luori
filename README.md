@@ -1,6 +1,6 @@
 # 落日
 
-A tiny, cozy driving prototype: a sedan cruising an endless Taiwanese freeway loop with light traffic. Three.js + Vite, plain JS, installable PWA that works offline after the first load.
+A tiny, cozy driving prototype: a sedan cruising the real Taiwan National Freeway 1 (中山高) southbound, Keelung to Kaohsiung, with light traffic. Three.js + Vite, plain JS, installable PWA that works offline after the first load.
 
 ## Run
 
@@ -32,6 +32,8 @@ Scene modes (icons top-right, last choice saved in `localStorage`):
 
 For testing real mode, `?t=day` or `?t=night` fakes the Taiwan clock.
 
+The route: National Freeway 1 southbound at real scale, 375.5 km from the Keelung end to Kaohsiung, with real bends and (smoothed) real hills. Speeds are real too: 110 km/h flat out by hand, autopilot cruises at 100 km/h (OSM tags 205 km of the route at a 110 limit, 168 km at 100), so a bend takes as long as it would in a real car at that speed. Full throttle all the way is ~3 h 25 min, autopilot ~3 h 45 min. After Kaohsiung the screen fades into the haze and you come back in at Keelung. Each load starts at Keelung. Kept simple: always three lanes and the same roadside (no interchanges, bridges, tunnels or towns), the small km posts count from the start of the OSM line, and autopilot doesn't follow the posted limits.
+
 Autopilot (steering-wheel icon, top-right) drives on its own with the same driver as the AI traffic: cruises at 100 km/h, follows, overtakes, takes the bends. Any key (modifier keys alone excepted) or the on-screen pad hands control back. It combines freely with either scene mode, and the touch buttons fade while it runs.
 
 ## Build
@@ -40,6 +42,16 @@ Autopilot (steering-wheel icon, top-right) drives on its own with the same drive
 npm run build      # outputs dist/ with relative paths, deployable under any sub-path
 npm run preview    # serve dist/ locally to test the PWA / offline mode
 ```
+
+## Route data
+
+`public/freeway1.bin` is baked once, not fetched by players:
+
+```bash
+node scripts/bake-route.mjs [overpass.json] [elevation.json]   # optional caches, see the script header
+```
+
+It takes OSM relation [3745870](https://www.openstreetmap.org/relation/3745870) (中山高速公路 南向), chains its 641 ways, projects to metres, resamples every 2 m, smooths the centreline (60 m Gaussian, OSM draws bends as straight pieces ~90 m apart) and stores heading, curvature and elevation as three Float32 columns (2.25 MB). Elevation is SRTM 30 m from the public OpenTopoData API, smoothed over 600 m (SRTM is the ground, not the bridge deck); steepest grade 5.9%. The game integrates x / z from the heading at load.
 
 ## Deploy
 
@@ -56,13 +68,18 @@ Service workers need HTTPS (or `localhost`). When changing `public/sw.js` behavi
 
 ## Layout
 
-- `src/road.js` – closed-loop road curve (arc-length sampled), scenery, signs, street lamps, sky/mountains/stars
-- `src/traffic.js` – low-poly sedan model, AI driver (car following + overtaking) used by traffic and autopilot
+- `src/road.js` – Freeway 1 route from `public/freeway1.bin` (arc-length sampled), scenery built in 400 m chunks around the player, signs, street lamps, sky/mountains/stars
+- `scripts/bake-route.mjs` – bakes `public/freeway1.bin` from OpenStreetMap + SRTM
+- `src/traffic.js` – low-poly sedan model, AI driver (car following + overtaking) used by traffic and autopilot; traffic lives in a window around the player
 - `src/audio.js` – synthesised engine hum, background music
 - `src/theme.js` – sunset / day / night palettes and the Taiwan-time rule
 - `src/main.js` – player car, arcade driving model, collisions, chase camera, scene mode switch
-- `public/` – manifest, service worker, icons
+- `public/` – manifest, service worker, icons, route data, music
 
 ## Credits
+
+Route: map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/). `public/freeway1.bin` is derived from it and is likewise licensed under the ODbL 1.0 (rebuild it with `scripts/bake-route.mjs`). The game shows the credit at the bottom of the screen.
+
+Elevation: SRTM 1 arc-second (NASA / USGS, public domain), queried through [OpenTopoData](https://www.opentopodata.org/).
 
 Background music: "Chill Lofi Inspired" by omfgdude, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain), from [OpenGameArt](https://opengameart.org/content/chill-lofi-inspired). Shipped unmodified as `public/chill-lofi.mp3`. CC0 needs no attribution; it's credited here anyway.

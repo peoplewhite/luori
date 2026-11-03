@@ -35,6 +35,10 @@
         padding: 6px 14px; border-radius: 999px; background: var(--card); font-size: 13px; pointer-events: none;
         opacity: 0; transition: opacity 1.5s; }
       #np.show { opacity: 1; }
+      #fade { position: fixed; inset: 0; pointer-events: none; opacity: 0; }
+      #osm { position: fixed; left: 50%; bottom: calc(3px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+        padding: 1px 8px; border-radius: 999px; background: var(--card); font-size: 10px; color: var(--ink); opacity: 0.4;
+        text-decoration: none; white-space: nowrap; }
       #start { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
       #start div { background: var(--card); padding: 14px 28px; border-radius: 24px; text-align: center; font-size: 22px; }
       #start small { display: block; margin-top: 6px; font-size: 14px; opacity: 0.7; white-space: nowrap; }
@@ -57,6 +61,8 @@
   </head>
   <body>
     <canvas id="c"></canvas>
+    <div id="fade"></div>
+    <a id="osm" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">路線 © OpenStreetMap contributors</a>
     <div id="np" aria-live="polite"></div>
     <div id="start"><div>點一下開始<small class="kb">W / ↑ 油門　S / ↓ 煞車・倒車　A D / ← → 轉向・點畫面左右換車道</small><small class="tc">點畫面左／右半邊換車道，其餘自動開</small></div></div>
     <div id="ui">

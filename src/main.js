@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildWorld, sample, worldAt, curvature, gap, LANE } from './road.js';
+import { buildWorld, sample, worldAt, curvature, gap, LANE, LOOP } from './road.js';
 import { makeCar, createTraffic, updateTraffic, renderTraffic, drive, laneFree, parts, CAR_L, CAR_W } from './traffic.js';
 import { themeFor } from './theme.js';
 import { sound, updateAudio, bgmPlaying, audioDebug, BGM } from './audio.js';
@@ -7,7 +7,7 @@ import { sound, updateAudio, bgmPlaying, audioDebug, BGM } from './audio.js';
 // Arcade tuning (metres, seconds)
 const VMAX = 110 / 3.6, VREV = -6, ACC = 3.2, BRAKE = 9, REV_ACC = 2.5, DRAG = 0.5;
 const LAT_MIN = -5.45, LAT_MAX = 7.85; // car centre limits between median barrier and guardrail
-const ALIGN = 1.6, TRAFFIC = 64, AUTO_V = 100 / 3.6;
+const ALIGN = 1.6, TRAFFIC = 24, AUTO_V = 100 / 3.6; // 24 cars in the 2.8 km around the player, as dense as before
 
 const $ = (id) => document.getElementById(id);
 const { clamp } = THREE.MathUtils;
@@ -58,7 +58,7 @@ function applyTheme(next) {
   scene.add(scenery);
   scene.fog.color.set(theme.fog[0]);
   [scene.fog.near, scene.fog.far] = theme.fog.slice(1);
-  document.body.style.background = theme.fog[0];
+  document.body.style.background = $('fade').style.background = theme.fog[0];
   document.querySelector('meta[name=theme-color]').content = theme.fog[0];
   parts.head.emissive.set(theme.night ? '#fff1cf' : 0);
   parts.tail.emissive.set(theme.night ? '#ff3030' : 0);
@@ -116,7 +116,7 @@ $('c').addEventListener('pointerdown', (e) => {
 });
 
 // --- State
-const st = { s: 0, lat: LANE, psi: 0, v: 0, steer: 0, spin: 0, shake: 0, camH: sample(0).th, roll: { x: 0, v: 0 }, pitch: { x: 0, v: 0 } };
+const st = { s: 100, lat: LANE, psi: 0, v: 0, steer: 0, spin: 0, shake: 0, camH: sample(100).th, roll: { x: 0, v: 0 }, pitch: { x: 0, v: 0 } };
 const traffic = createTraffic(scene, TRAFFIC, st.s);
 
 let auto = false;
@@ -240,6 +240,7 @@ function update(dt) {
   spring(st.roll, clamp(st.v * yaw * 0.012, -0.05, 0.05), dt);
   spring(st.pitch, clamp(a * 0.005, -0.04, 0.04), dt);
   st.spin += (st.v * dt) / 0.34;
+  st.s = ((st.s % LOOP) + LOOP) % LOOP; // past Kaohsiung comes Keelung again
 }
 
 // Returns [acceleration, steering yaw rate] for the body sway springs.
@@ -309,21 +310,27 @@ function bumpTraffic() {
 
 const UP = new THREE.Vector3(0, 1, 0), sunDir = new THREE.Vector3();
 const fwd = (h) => new THREE.Vector3(Math.sin(h), 0, -Math.cos(h));
+// The route isn't a loop: fade into the haze over the last 150 m before Kaohsiung, wrap to Keelung, fade back in.
+const fadeAt = (s) => clamp(Math.max((s - (LOOP - 170)) / 150, 1 - s / 80), 0, 1);
+let fade = -1;
 function render(dt, t) {
-  const h = sample(st.s).th + st.psi;
-  car.root.position.copy(worldAt(st.s, st.lat));
-  car.root.rotation.y = -h;
+  world.update(st.s);
+  const p = sample(st.s), h = p.th + st.psi, pos = worldAt(st.s, st.lat);
+  if (pos.distanceToSquared(car.root.position) > 2500) st.camH = h; // the seam jump: don't swing the camera across
+  car.root.position.copy(pos);
+  car.root.rotation.set(Math.atan(p.grade), -h, 0);
+  if (fadeAt(st.s) !== fade) $('fade').style.opacity = fade = fadeAt(st.s);
   const bob = Math.sin(t * 13) * 0.003 * Math.min(Math.abs(st.v) / 10, 1);
   car.body.rotation.set(st.pitch.x + bob, 0, st.roll.x);
   car.wheels.forEach((w, i) => {
     w.rotation.x = -st.spin;
     if (i < 2) w.rotation.y = -st.steer * 0.45;
   });
-  renderTraffic(traffic);
-  world.follow.position.set(car.root.position.x, 0, car.root.position.z);
+  renderTraffic(traffic, st.s);
+  world.follow.position.copy(car.root.position);
 
   // Chase camera: heading eases toward the car's, distance fixed so speed never drags it away.
-  // Wrap the difference: the road heading jumps by 2π each lap, which would otherwise spin the camera.
+  // Wrap the difference so the camera always turns the short way round.
   const dh = h - st.camH;
   st.camH += Math.atan2(Math.sin(dh), Math.cos(dh)) * (1 - Math.exp(-4 * dt));
   world.sky.position.copy(world.follow.position);
@@ -333,8 +340,8 @@ function render(dt, t) {
   camera.position
     .copy(car.root.position)
     .addScaledVector(f, -8.5 - Math.abs(st.v) * 0.05)
-    .setY(3.1 + (Math.random() - 0.5) * 0.15 * st.shake);
-  camera.lookAt(car.root.position.clone().addScaledVector(f, 7).setY(1.1));
+    .setY(pos.y + 3.1 + (Math.random() - 0.5) * 0.15 * st.shake);
+  camera.lookAt(car.root.position.clone().addScaledVector(f, 7).setY(pos.y + 1.1));
   const fov = 58 + Math.abs(st.v) * 0.3;
   if (Math.abs(camera.fov - fov) > 0.01) {
     camera.fov = fov;
@@ -367,6 +374,8 @@ window.__luori = {
   bumps: () => bumps,
   audio: audioDebug,
   setAuto,
+  seek: (s) => (st.s = s),
+  loop: LOOP,
   step(sec, dt = 1 / 60, draw = false) {
     for (let i = 0; i < sec / dt; i++) {
       update(dt);

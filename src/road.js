@@ -1,58 +1,61 @@
 import * as THREE from 'three';
 
-// The road is a closed loop parameterised by arc length s (metres), so driving never ends.
-// Lateral offset `lat` is positive to the right. Heading th: forward = (sin th, -cos th) in XZ, right = (cos th, sin th).
-export const LOOP = 7600;
+// The road is National Freeway 1 southbound, Keelung -> Kaohsiung (OpenStreetMap, baked by scripts/bake-route.mjs),
+// parameterised by arc length s in real metres. It isn't a loop: s wraps from Kaohsiung back to Keelung (main.js fades
+// over the seam). Lateral offset `lat` is positive to the right. Heading th: forward = (sin th, -cos th) in XZ, right = (cos th, sin th).
 export const LANE = 3.6;
 
 const STEP = 2;
-const HALF = LOOP / 2;
-const N = LOOP / STEP + 1;
-const PX = new Float64Array(N), PZ = new Float64Array(N), PTH = new Float64Array(N);
+const res = await fetch('freeway1.bin');
+if (!res.ok) throw new Error(`freeway1.bin: HTTP ${res.status}`);
+const DATA = new Float32Array(await res.arrayBuffer());
+const N = DATA.length / 3;
+const PTH = DATA.subarray(0, N), PK = DATA.subarray(N, 2 * N), PY = DATA.subarray(2 * N);
+/** Route length in metres; every s wraps modulo LOOP. */
+export const LOOP = (N - 1) * STEP;
 
-// Each half turns exactly 180° and the second half repeats the first, so the loop closes on itself.
-// The extra wiggle integrates to zero over a half and adds gentle left/right bends.
-export function curvature(s) {
-  const u = (((s % HALF) + HALF) % HALF) / HALF;
-  return ((2 * Math.PI) / HALF) * Math.sin(Math.PI * u) ** 2 + 0.0007 * Math.sin(6 * Math.PI * u);
+// Positions come from integrating the heading, centred on the route's midpoint so world coordinates stay within
+// ~150 km (Float32 on the GPU is still ~1 cm there).
+const PX = new Float64Array(N), PZ = new Float64Array(N);
+for (let i = 1; i < N; i++) {
+  const mid = (PTH[i - 1] + PTH[i]) / 2;
+  PX[i] = PX[i - 1] + Math.sin(mid) * STEP;
+  PZ[i] = PZ[i - 1] - Math.cos(mid) * STEP;
 }
-
 {
-  let x = 0, z = 0, th = 0;
-  for (let i = 0; i < N; i++) {
-    PX[i] = x; PZ[i] = z; PTH[i] = th;
-    const k = curvature((i + 0.5) * STEP);
-    const mid = th + (k * STEP) / 2;
-    x += Math.sin(mid) * STEP;
-    z -= Math.cos(mid) * STEP;
-    th += k * STEP;
-  }
+  const [cx, cz] = [PX[N >> 1], PZ[N >> 1]];
+  for (let i = 0; i < N; i++) (PX[i] -= cx), (PZ[i] -= cz);
 }
 
-/** Signed shortest distance along the loop from a to b, in (-LOOP/2, LOOP/2]. */
+/** Signed shortest distance along the route from a to b, in (-LOOP/2, LOOP/2], counting across the Kaohsiung/Keelung seam. */
 export const gap = (a, b) => ((((b - a) % LOOP) + LOOP * 1.5) % LOOP) - LOOP / 2;
 
+/** Unwrapped s: before 0 / past LOOP the road carries straight on along the end heading (scenery and cars across the seam). */
 export function sample(s) {
-  const f = Math.min((((s % LOOP) + LOOP) % LOOP) / STEP, N - 1.0001);
-  const i = Math.floor(f), t = f - i;
-  const lerp = (a) => a[i] + (a[i + 1] - a[i]) * t;
-  return { x: lerp(PX), z: lerp(PZ), th: lerp(PTH) };
+  const f = s / STEP, i = Math.min(Math.max(Math.floor(f), 0), N - 2), t = f - i, u = Math.min(Math.max(t, 0), 1);
+  const lerp = (a, w) => a[i] + (a[i + 1] - a[i]) * w;
+  return { x: lerp(PX, t), z: lerp(PZ, t), th: lerp(PTH, u), y: lerp(PY, u), grade: t === u ? (PY[i + 1] - PY[i]) / STEP : 0 };
+}
+
+export function curvature(s) {
+  const f = s / STEP, i = Math.floor(f);
+  return i < 0 || i >= N - 1 ? 0 : PK[i] + (PK[i + 1] - PK[i]) * (f - i);
 }
 
 export function worldAt(s, lat, y = 0) {
   const p = sample(s);
-  return new THREE.Vector3(p.x + Math.cos(p.th) * lat, y, p.z + Math.sin(p.th) * lat);
+  return new THREE.Vector3(p.x + Math.cos(p.th) * lat, p.y + y, p.z + Math.sin(p.th) * lat);
 }
 
-// A ribbon around the whole loop between cross-section points (lat0,y0) and (lat1,y1).
-function strip(lat0, y0, lat1, y1, step = 4) {
+// A ribbon from s0 over len metres between cross-section points (lat0,y0) and (lat1,y1), relative to `o`.
+function strip(s0, len, o, lat0, y0, lat1, y1, step = 4) {
   const pos = [], uv = [], idx = [];
-  const n = LOOP / step;
+  const n = len / step;
   for (let i = 0; i <= n; i++) {
-    const s = i * step;
-    const a = worldAt(s, lat0, y0), b = worldAt(s, lat1, y1);
+    const s = s0 + i * step;
+    const a = worldAt(s, lat0, y0).sub(o), b = worldAt(s, lat1, y1).sub(o);
     pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
-    uv.push(0, s / 10, 1, s / 10);
+    uv.push(0, (i * step) / 10, 1, (i * step) / 10); // chunk length is a multiple of the 10 m dash period
     if (i < n) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
   }
   const g = new THREE.BufferGeometry();
@@ -120,9 +123,9 @@ function signMesh(lines, w, h, bg = '#1e6a47') {
 }
 
 // Roadside board facing oncoming traffic, bottom edge at `bottom`, posts at local x offsets.
-function addSign(scene, s, lat, w, h, lines, bottom, posts) {
+function addSign(scene, o, s, lat, w, h, lines, bottom, posts) {
   const grp = new THREE.Group();
-  grp.position.copy(worldAt(s, lat));
+  grp.position.copy(worldAt(s, lat).sub(o));
   grp.rotation.y = -sample(s).th;
   const board = signMesh(lines, w, h);
   board.position.y = bottom + h / 2;
@@ -148,19 +151,11 @@ function instanced(geo, material, list, place) {
   return m;
 }
 
-/** Builds road + scenery for a theme from theme.js (day or night palette, night adds lamps and stars). */
 // Median lamp posts every 40 m; at night the heads glow and cast a soft fake light pool on the road.
-function addStreetLamps(scene, night, metal) {
-  const list = Array.from({ length: LOOP / 40 }, (_, i) => i * 40 + 20);
-  const at = (lat, y) => (o, s) => {
-    o.position.copy(worldAt(s, lat, y));
-    o.rotation.y = -sample(s).th;
-  };
-  scene.add(instanced(new THREE.BoxGeometry(0.2, 9.2, 0.2), metal, list, at(-6.9, 5.4)));
-  scene.add(instanced(new THREE.BoxGeometry(2.6, 0.14, 0.14), metal, list, at(-5.7, 9.95)));
-  const head = night ? new THREE.MeshBasicMaterial({ color: '#ffe7b8' }) : metal;
-  scene.add(instanced(new THREE.BoxGeometry(1.1, 0.2, 0.45), head, list, at(-4.5, 9.85)));
-  if (!night) return;
+function lampKit(night, metal) {
+  const kit = { metal, pole: new THREE.BoxGeometry(0.2, 9.2, 0.2), arm: new THREE.BoxGeometry(2.6, 0.14, 0.14), headGeo: new THREE.BoxGeometry(1.1, 0.2, 0.45) };
+  kit.head = night ? new THREE.MeshBasicMaterial({ color: '#ffe7b8' }) : metal;
+  if (!night) return kit;
   // shortcut: painted light pools instead of real lights (no cost per lamp); cars are not lit by them.
   const c = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
   const g = c.getContext('2d');
@@ -171,8 +166,20 @@ function addStreetLamps(scene, night, metal) {
   g.fillRect(0, 0, 128, 128);
   const map = new THREE.CanvasTexture(c);
   map.colorSpace = THREE.SRGBColorSpace;
-  const pool = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false });
-  scene.add(instanced(new THREE.PlaneGeometry(22, 26).rotateX(-Math.PI / 2), pool, list, at(-2, 0.03)));
+  kit.pool = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false });
+  kit.poolGeo = new THREE.PlaneGeometry(22, 26).rotateX(-Math.PI / 2);
+  return kit;
+}
+
+function addStreetLamps(scene, o, list, kit) {
+  const at = (lat, y) => (obj, s) => {
+    obj.position.copy(worldAt(s, lat, y).sub(o));
+    obj.rotation.y = -sample(s).th;
+  };
+  scene.add(instanced(kit.pole, kit.metal, list, at(-6.9, 5.4)));
+  scene.add(instanced(kit.arm, kit.metal, list, at(-5.7, 9.95)));
+  scene.add(instanced(kit.headGeo, kit.head, list, at(-4.5, 9.85)));
+  if (kit.pool) scene.add(instanced(kit.poolGeo, kit.pool, list, at(-2, 0.03)));
 }
 
 function stars(rand) {
@@ -185,49 +192,92 @@ function stars(rand) {
   return new THREE.Points(g, new THREE.PointsMaterial({ color: '#fdf6e3', size: 2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.85, depthWrite: false }));
 }
 
-export function buildWorld(scene, aniso, theme) {
-  const rand = rng(7);
+// Scenery only exists in chunks around the player (the route is 375 km): 400 m behind to 2.8 km ahead, past the fog.
+const CHUNK = 400, BEHIND = 1, AHEAD = 6; // CHUNK: a multiple of the dash period (10 m), lamp spacing (40 m) and km posts (200 m)
+const TREES = Math.round((2400 / 7600) * CHUNK);
+const greens = ['#7fa06a', '#93ad6e', '#6f9468', '#a3b56f', '#88a366'].map((c) => new THREE.Color(c));
 
-  // Road surface + barriers
-  const road = new THREE.Mesh(strip(ROAD_L, 0, ROAD_R, 0, 2), mat('#ffffff', { map: roadTexture(aniso) }));
+function buildChunk(i, kit) {
+  const s0 = i * CHUNK, grp = new THREE.Group(), rand = rng(1000 + i); // same trees every time the chunk comes back
+  const o = worldAt(s0, 0);
+  grp.position.copy(o); // geometry is chunk-local: keeps Float32 vertices small
+  const road = new THREE.Mesh(strip(s0, CHUNK, o, ROAD_L, 0, ROAD_R, 0, 2), kit.road);
   road.receiveShadow = true;
-  scene.add(road);
-  const concrete = mat('#dcd3c4');
-  for (const g of [strip(-6.55, 0, -6.75, 0.85), strip(-6.75, 0.85, -7.05, 0.85), strip(-7.05, 0.85, -7.25, 0)])
-    scene.add(new THREE.Mesh(g, concrete));
-  const metal = mat('#c9cfd2');
-  scene.add(new THREE.Mesh(strip(8.95, 0.5, 8.95, 0.85), metal));
-  const posts = Array.from({ length: LOOP / 4 }, (_, i) => i * 4);
-  scene.add(instanced(new THREE.BoxGeometry(0.15, 0.9, 0.15).translate(0, 0.45, 0), metal, posts, (o, s) => {
-    o.position.copy(worldAt(s, 9.05));
-  }));
+  grp.add(road);
+  for (const [l0, y0, l1, y1] of [[-6.55, 0, -6.75, 0.85], [-6.75, 0.85, -7.05, 0.85], [-7.05, 0.85, -7.25, 0]])
+    grp.add(new THREE.Mesh(strip(s0, CHUNK, o, l0, y0, l1, y1), kit.concrete));
+  grp.add(new THREE.Mesh(strip(s0, CHUNK, o, 8.95, 0.5, 8.95, 0.85), kit.metal));
+  const posts = Array.from({ length: CHUNK / 4 }, (_, j) => s0 + j * 4);
+  grp.add(instanced(kit.post, kit.metal, posts, (obj, s) => obj.position.copy(worldAt(s, 9.05).sub(o))));
 
-  // Signs
-  addSign(scene, 250, 11, 6, 2.6, ['國道 3 號 南下', 'Freeway 3 South'], 4, [-2, 2]);
-  addSign(scene, 3200, 11, 6, 2.6, ['保持安全距離', 'Keep Distance'], 4, [-2, 2]);
-  for (let s = 0; s < LOOP; s += 200) addSign(scene, s, 9.7, 0.6, 0.75, [(186 + s / 1000).toFixed(1)], 0.9, [0]);
+  // Signs: route sign every 10 km, a reminder 5 km after it, km posts every 200 m (s from the Keelung end, ~official mileage).
+  if (i % 25 === 0) addSign(grp, o, s0 + 250, 11, 6, 2.6, ['國道 1 號 南下', 'Freeway 1 South'], 4, [-2, 2]);
+  if (i % 25 === 12) addSign(grp, o, s0 + 250, 11, 6, 2.6, ['保持安全距離', 'Keep Distance'], 4, [-2, 2]);
+  for (let s = s0; s < s0 + CHUNK; s += 200) if (s >= 0 && s <= LOOP) addSign(grp, o, s, 9.7, 0.6, 0.75, [(s / 1000).toFixed(1)], 0.9, [0]);
 
   // Trees: low-poly crowns + trunks on both sides
-  const greens = ['#7fa06a', '#93ad6e', '#6f9468', '#a3b56f', '#88a366'].map((c) => new THREE.Color(c));
-  const trees = Array.from({ length: 2400 }, () => {
+  const trees = Array.from({ length: TREES }, () => {
     const right = rand() < 0.5;
     return {
-      s: rand() * LOOP,
+      s: s0 + rand() * CHUNK,
       lat: right ? 12 + rand() ** 2 * 70 : -10 - rand() ** 2 * 70,
       k: 0.7 + rand() * 0.8,
       r: rand() * 6,
       color: greens[Math.floor(rand() * greens.length)],
     };
   });
-  const placeTree = (o, t) => {
-    o.position.copy(worldAt(t.s, t.lat));
-    o.scale.setScalar(t.k);
-    o.rotation.y = t.r;
+  const placeTree = (obj, t) => {
+    obj.position.copy(worldAt(t.s, t.lat).sub(o));
+    obj.scale.setScalar(t.k);
+    obj.rotation.y = t.r;
   };
-  scene.add(instanced(new THREE.CylinderGeometry(0.18, 0.28, 1.6, 5).translate(0, 0.8, 0), mat('#8a6a4f'), trees.map(({ color, ...t }) => t), placeTree));
-  scene.add(instanced(new THREE.IcosahedronGeometry(1.9, 0).translate(0, 3.3, 0), mat('#ffffff'), trees, placeTree));
+  grp.add(instanced(kit.trunk, kit.bark, trees.map(({ color, ...t }) => t), placeTree));
+  grp.add(instanced(kit.crown, kit.leaf, trees, placeTree));
 
-  if (theme.lamps) addStreetLamps(scene, theme.night, metal);
+  if (kit.lamps) addStreetLamps(grp, o, Array.from({ length: CHUNK / 40 }, (_, j) => s0 + 20 + j * 40), kit.lamps);
+  return grp;
+}
+
+/** Builds lights, sky and far scenery for a theme from theme.js; `update(s)` keeps road chunks around s. */
+export function buildWorld(scene, aniso, theme) {
+  const metal = mat('#c9cfd2');
+  const kit = {
+    road: mat('#ffffff', { map: roadTexture(aniso) }),
+    concrete: mat('#dcd3c4'),
+    metal,
+    post: new THREE.BoxGeometry(0.15, 0.9, 0.15).translate(0, 0.45, 0),
+    trunk: new THREE.CylinderGeometry(0.18, 0.28, 1.6, 5).translate(0, 0.8, 0),
+    bark: mat('#8a6a4f'),
+    crown: new THREE.IcosahedronGeometry(1.9, 0).translate(0, 3.3, 0),
+    leaf: mat('#ffffff'),
+    lamps: theme.lamps && lampKit(theme.night, metal),
+  };
+  // Shared by every chunk: freed with the whole world (main.js), not when a chunk is dropped.
+  const shared = new Set([...Object.values(kit), ...Object.values(kit.lamps || {})]);
+  const free = (obj) => {
+    if (obj.isInstancedMesh) obj.dispose();
+    if (obj.geometry && !shared.has(obj.geometry)) obj.geometry.dispose();
+    if (obj.material && !shared.has(obj.material)) {
+      obj.material.map?.dispose();
+      obj.material.dispose();
+    }
+  };
+  const chunks = new Map();
+  function update(s) {
+    const c = Math.floor(s / CHUNK);
+    for (const [i, g] of chunks) {
+      if (i >= c - BEHIND && i <= c + AHEAD) continue;
+      scene.remove(g);
+      g.traverse(free);
+      chunks.delete(i);
+    }
+    for (let i = c - BEHIND; i <= c + AHEAD; i++) {
+      if (chunks.has(i)) continue;
+      const g = buildChunk(i, kit);
+      chunks.set(i, g);
+      scene.add(g);
+    }
+  }
 
   // Lights
   scene.add(new THREE.HemisphereLight(...theme.hemi));
@@ -241,8 +291,10 @@ export function buildWorld(scene, aniso, theme) {
 
   // Far scenery that travels with the player: ground, sky dome, sun disc, mountain ring
   const follow = new THREE.Group();
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(16000, 16000).rotateX(-Math.PI / 2), mat('#b9c48c'));
+  // The ground is drawn first and never hides anything: with real elevation the road ahead can dip below the car's level.
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(16000, 16000).rotateX(-Math.PI / 2), mat('#b9c48c', { depthWrite: false }));
   ground.position.y = -0.3;
+  ground.renderOrder = -1;
   follow.add(ground);
 
   const skyGeo = new THREE.SphereGeometry(5500, 32, 16);
@@ -254,7 +306,9 @@ export function buildWorld(scene, aniso, theme) {
     cols.push(c.r, c.g, c.b);
   }
   skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-  follow.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
+  const dome = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+  dome.renderOrder = -2;
+  follow.add(dome);
 
   // Sun/moon discs live in their own group that main.js turns with the camera, so they always stay in view.
   const sky = new THREE.Group();
@@ -267,6 +321,7 @@ export function buildWorld(scene, aniso, theme) {
 
   if (theme.night) follow.add(stars(rng(3))); // own seed so the mountains don't move between themes
 
+  const rand = rng(7);
   const mtnCols = theme.mtn.colors.map((c) => new THREE.Color(c));
   const mtns = Array.from({ length: 46 }, (_, i) => ({
     a: (i / 46) * Math.PI * 2 + rand() * 0.1,
@@ -285,5 +340,5 @@ export function buildWorld(scene, aniso, theme) {
   scene.add(follow);
 
   scene.add(sky);
-  return { sun, follow, sky };
+  return { sun, follow, sky, update };
 }

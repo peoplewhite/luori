@@ -20,6 +20,7 @@ export const parts = { glass: mat('#53627e'), tyre: mat('#2f2c2c'), head: mat('#
 /** Returns { root, body, wheels }: `root` is placed on the road, `body` may sway, wheels spin/steer. */
 export function makeCar(color) {
   const root = new THREE.Group(), body = new THREE.Group();
+  root.rotation.order = 'YXZ'; // heading, then pitch with the grade
   root.add(body);
   const paint = mat(color);
   const add = (parent, geo, m, x, y, z) => {
@@ -49,18 +50,34 @@ export function makeCar(color) {
 const PALETTE = ['#f4ede1', '#9cc5d9', '#a8d5ba', '#f2c57c', '#c9c3d9', '#8fa3b8', '#f0a3a3', '#e8e2d6'];
 const laneLat = (lane) => (lane - 1) * LANE;
 
-/** AI cars spread around the loop, keeping clear of the player's start position. */
+// Traffic only exists around the player (the route is 375 km): cars that drop BACK behind come back ahead, just past
+// the fog, and cars that pull FRONT ahead come back from behind.
+const BACK = 500, FRONT = 2300;
+const rand = rng(11);
+
+/** AI cars spread from BACK behind to FRONT ahead of the player's start, keeping clear of it. */
 export function createTraffic(scene, count, startS) {
-  const rand = rng(11);
   return Array.from({ length: count }, (_, i) => {
     const lane = Math.floor(rand() * 3);
     // Mostly slower than the player's 110 km/h so you keep passing cars; a few fast ones pass you.
     const cruise = (rand() < 0.15 ? 105 + rand() * 13 : 60 + rand() * 40) / 3.6;
     const { root } = makeCar(PALETTE[i % PALETTE.length]);
     scene.add(root);
-    const s = (startS + 40 + (i / count) * (LOOP - 80) + rand() * 30) % LOOP;
+    const d = -BACK + 20 + ((i + rand() * 0.5) / count) * (BACK + FRONT - 70);
+    const s = (startS + (Math.abs(d) < 30 ? d + 60 : d) + LOOP) % LOOP;
     return { s, lat: laneLat(lane), lane, v: cruise, cruise, latV: 0, root };
   });
+}
+
+function recycle(c, player, all) {
+  const d = gap(player.s, c.s);
+  if (d > -BACK && d < FRONT) return;
+  const was = c.s;
+  c.s = (player.s + (d < 0 ? FRONT - 50 - rand() * 300 : -BACK + 20 + rand() * 100) + LOOP) % LOOP;
+  const lanes = [0, 1, 2].filter((lane) => laneFree(c, lane, all));
+  if (!lanes.length) return void (c.s = was); // no gap there now, try again next frame
+  c.lane = lanes[Math.floor(rand() * lanes.length)];
+  Object.assign(c, { lat: laneLat(c.lane), latV: 0, v: c.cruise });
 }
 
 // Nearest vehicle ahead whose lateral position overlaps `lat`.
@@ -99,11 +116,14 @@ export function drive(c, all, dt) {
 export function updateTraffic(cars, player, dt) {
   const all = [...cars, player];
   for (const c of cars) drive(c, all, dt);
+  for (const c of cars) recycle(c, player, all);
 }
 
-export function renderTraffic(cars) {
+/** Cars are placed by their distance from the player, so near the Kaohsiung/Keelung seam they stay on the road around it. */
+export function renderTraffic(cars, playerS) {
   for (const c of cars) {
-    c.root.position.copy(worldAt(c.s, c.lat));
-    c.root.rotation.y = -(sample(c.s).th + Math.atan2(c.latV, Math.max(c.v, 1)));
+    const s = playerS + gap(playerS, c.s), p = sample(s);
+    c.root.position.copy(worldAt(s, c.lat));
+    c.root.rotation.set(Math.atan(p.grade), -(p.th + Math.atan2(c.latV, Math.max(c.v, 1))), 0);
   }
 }
