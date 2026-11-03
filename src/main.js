@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { buildWorld, sample, worldAt, curvature, gap, LANE } from './road.js';
 import { makeCar, createTraffic, updateTraffic, renderTraffic, drive, laneFree, parts, CAR_L, CAR_W } from './traffic.js';
 import { themeFor } from './theme.js';
-import { sound, updateAudio, audioDebug } from './audio.js';
+import { sound, updateAudio, bgmPlaying, audioDebug, BGM } from './audio.js';
 
 // Arcade tuning (metres, seconds)
 const VMAX = 110 / 3.6, VREV = -6, ACC = 3.2, BRAKE = 9, REV_ACC = 2.5, DRAG = 0.5;
@@ -195,7 +195,16 @@ $('snd').addEventListener('click', () => {
   store(SOUND_KEY, soundOn ? '1' : '0');
   $('snd').setAttribute('aria-pressed', soundOn);
   if (started) sound(soundOn);
+  if (soundOn && bgmPlaying()) nowPlaying();
 });
+// Song credit, top-left: fades in when the music starts, then out again.
+$('np').textContent = `♪ ${BGM.title} — ${BGM.artist}`;
+let npTimer;
+function nowPlaying() {
+  $('np').classList.add('show');
+  clearTimeout(npTimer);
+  npTimer = setTimeout(() => $('np').classList.remove('show'), 7000);
+}
 // iOS interrupts audio when the app is backgrounded; try to pick it up again on return.
 document.addEventListener('visibilitychange', () => started && soundOn && !document.hidden && sound(true));
 
@@ -332,7 +341,7 @@ function render(dt, t) {
     camera.updateProjectionMatrix();
   }
   renderer.render(scene, camera);
-  updateAudio(st.v, theme.night);
+  updateAudio(st.v, dt, nowPlaying);
 }
 
 function resize() {

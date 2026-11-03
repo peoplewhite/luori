@@ -1,5 +1,5 @@
 // Offline cache: precache the built page + every asset it references, network-first for the page itself.
-const CACHE = 'luori-v2';
+const CACHE = 'luori-v3';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -7,7 +7,7 @@ self.addEventListener('install', (e) => {
       const cache = await caches.open(CACHE);
       const html = await (await fetch('./', { cache: 'reload' })).text();
       const urls = [...html.matchAll(/(?:src|href)="([^"#]+)"/g)].map((m) => m[1]).filter((u) => !/^[a-z]+:/i.test(u));
-      await cache.addAll(['./', ...new Set(urls)]);
+      await cache.addAll(['./', 'chill-lofi.mp3', ...new Set(urls)]); // the music is fetched from JS, not referenced in the HTML
       await self.skipWaiting();
     })(),
   );

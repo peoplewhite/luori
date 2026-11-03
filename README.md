@@ -15,7 +15,7 @@ The camera icon saves the current frame as a PNG (share sheet on phones, so it c
 
 The cup icon keeps the screen awake (Screen Wake Lock) while autopilot drives: on by default on desktop, off by default on phones to save battery; the choice is remembered. The fullscreen icon is hidden where the Fullscreen API is missing (iPhone Safari) and in the installed PWA, which is already full screen.
 
-Sound is generated with Web Audio, no audio files: an engine hum and wind that follow the speed, plus crickets at night. The speaker icon mutes it (remembered).
+Sound: a low engine hum generated with Web Audio that follows the speed. After a minute of driving, a lofi track fades in (looped) and its title / artist fade in top-left for a few seconds. The speaker icon mutes both (remembered).
 
 Installed as a PWA (home screen), the touch buttons are hidden and autopilot is on by default unless the autopilot icon was switched off before; lane taps still work and a physical keyboard still takes over.
 
@@ -58,7 +58,11 @@ Service workers need HTTPS (or `localhost`). When changing `public/sw.js` behavi
 
 - `src/road.js` – closed-loop road curve (arc-length sampled), scenery, signs, street lamps, sky/mountains/stars
 - `src/traffic.js` – low-poly sedan model, AI driver (car following + overtaking) used by traffic and autopilot
-- `src/audio.js` – procedural engine / wind / cricket sounds
+- `src/audio.js` – synthesised engine hum, background music
 - `src/theme.js` – sunset / day / night palettes and the Taiwan-time rule
 - `src/main.js` – player car, arcade driving model, collisions, chase camera, scene mode switch
 - `public/` – manifest, service worker, icons
+
+## Credits
+
+Background music: "Chill Lofi Inspired" by omfgdude, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain), from [OpenGameArt](https://opengameart.org/content/chill-lofi-inspired). Shipped unmodified as `public/chill-lofi.mp3`. CC0 needs no attribution; it's credited here anyway.
