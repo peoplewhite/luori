@@ -13,11 +13,13 @@ No HUD on screen, just small icons top-right that fade after a few idle seconds.
 
 Sound is generated with Web Audio, no audio files: an engine hum and wind that follow the speed, plus crickets at night. The speaker icon mutes it (remembered).
 
-Installed as a PWA (home screen), the touch buttons are hidden and autopilot is on by default unless the autopilot icon was switched off before; a physical keyboard still takes over.
+Installed as a PWA (home screen), the touch buttons are hidden and autopilot is on by default unless the autopilot icon was switched off before; lane taps still work and a physical keyboard still takes over.
 
 Landscape only: the manifest locks installed PWAs to landscape, and a portrait phone browser shows a "rotate your device" overlay.
 
 Controls: `W/↑` throttle, `S/↓` brake (hold at standstill to reverse), `A D / ← →` steer. On touch devices on-screen buttons appear.
+
+Simplest touch: tap the left / right half of the screen to move one lane left / right; this turns autopilot on and it drives the rest. A tap into a lane that isn't clear is ignored.
 
 Scene modes (icons top-right, last choice saved in `localStorage`):
 
@@ -26,7 +28,7 @@ Scene modes (icons top-right, last choice saved in `localStorage`):
 
 For testing real mode, `?t=day` or `?t=night` fakes the Taiwan clock.
 
-Autopilot (steering-wheel icon, top-right) drives on its own with the same driver as the AI traffic: cruises at 100 km/h, follows, overtakes, takes the bends. Any key or touch (modifier keys alone excepted) hands control back. It combines freely with either scene mode, and the touch buttons fade while it runs.
+Autopilot (steering-wheel icon, top-right) drives on its own with the same driver as the AI traffic: cruises at 100 km/h, follows, overtakes, takes the bends. Any key (modifier keys alone excepted) or the on-screen pad hands control back. It combines freely with either scene mode, and the touch buttons fade while it runs.
 
 ## Build
 

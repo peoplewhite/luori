@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { buildWorld, sample, worldAt, curvature, gap, LANE } from './road.js';
-import { makeCar, createTraffic, updateTraffic, renderTraffic, drive, parts, CAR_L, CAR_W } from './traffic.js';
+import { makeCar, createTraffic, updateTraffic, renderTraffic, drive, laneFree, parts, CAR_L, CAR_W } from './traffic.js';
 import { themeFor } from './theme.js';
 import { sound, updateAudio, audioDebug } from './audio.js';
 
@@ -96,6 +96,7 @@ addEventListener('keyup', (e) => KEYMAP[e.code] && (keys[KEYMAP[e.code]] = false
 addEventListener('blur', () => Object.keys(keys).forEach((k) => (keys[k] = false)));
 for (const b of document.querySelectorAll('[data-k]')) {
   const set = (on) => (e) => {
+    if (on && auto) setAuto(false); // the pad is manual driving
     keys[b.dataset.k] = on;
     b.classList.toggle('on', on);
     e.preventDefault();
@@ -106,7 +107,12 @@ for (const b of document.querySelectorAll('[data-k]')) {
 // Installed PWA (home screen): no touch pad, autopilot by default, and only a real keyboard takes over.
 const PWA = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true;
 document.documentElement.classList.toggle('pwa', PWA);
-addEventListener('pointerdown', (e) => auto && !PWA && !e.target.closest('#ui, #start') && setAuto(false), true);
+// Simplest touch: tap the left / right half of the road to change lane, autopilot does the rest.
+$('c').addEventListener('pointerdown', (e) => {
+  if (!auto) setAuto(true);
+  const lane = st.lane + (e.clientX < innerWidth / 2 ? -1 : 1);
+  if (laneFree(st, lane, [...traffic, st])) st.lane = lane; // shortcut: a blocked lane ignores the tap, queue it if that feels unresponsive
+});
 
 // --- State
 const st = { s: 0, lat: LANE, psi: 0, v: 0, steer: 0, spin: 0, shake: 0, camH: sample(0).th, roll: { x: 0, v: 0 }, pitch: { x: 0, v: 0 } };

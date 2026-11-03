@@ -73,6 +73,14 @@ function leader(c, lat, all) {
   return best;
 }
 
+/**
+ * A lane `c` may move into: no car in it, or already moving into it, from 20 m behind to 35 m ahead.
+ * Claimed lanes count as taken so two cars never merge into the same gap.
+ */
+export const laneFree = (c, lane, all) =>
+  lane >= 0 && lane <= 2 &&
+  all.every((o) => o === c || (Math.abs(o.lat - laneLat(lane)) > 2.4 && o.lane !== lane) || gap(c.s, o.s) < -20 || gap(c.s, o.s) > 35);
+
 /** One driving step for an AI car (or the player on autopilot): `c` needs { s, lat, v, lane, cruise, latV }. */
 export function drive(c, all, dt) {
   const lead = leader(c, c.lat, all);
@@ -80,13 +88,8 @@ export function drive(c, all, dt) {
   c.v = Math.max(0, c.v + clamp(target - c.v, -8 * dt, 2 * dt));
 
   // Held up and settled in lane: try the passing lane (left) first, then right.
-  // A lane another car is already moving into counts as taken, so two cars never merge into the same gap.
-  if (lead.d < 45 && lead.v < c.cruise - 2 && Math.abs(c.lat - laneLat(c.lane)) < 0.1) {
-    const free = (lane) =>
-      lane >= 0 && lane <= 2 &&
-      all.every((o) => o === c || (Math.abs(o.lat - laneLat(lane)) > 2.4 && o.lane !== lane) || gap(c.s, o.s) < -20 || gap(c.s, o.s) > 35);
-    c.lane = [c.lane - 1, c.lane + 1].find(free) ?? c.lane;
-  }
+  if (lead.d < 45 && lead.v < c.cruise - 2 && Math.abs(c.lat - laneLat(c.lane)) < 0.1)
+    c.lane = [c.lane - 1, c.lane + 1].find((lane) => laneFree(c, lane, all)) ?? c.lane;
   c.latV = clamp(laneLat(c.lane) - c.lat, -1, 1) * 1.2;
   c.lat += c.latV * dt;
   c.s = (c.s + c.v * dt) % LOOP;
