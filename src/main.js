@@ -107,6 +107,7 @@ for (const b of document.querySelectorAll('[data-k]')) {
 // Installed PWA (home screen): no touch pad, autopilot by default, and only a real keyboard takes over.
 const PWA = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true;
 document.documentElement.classList.toggle('pwa', PWA);
+const COARSE = matchMedia('(pointer: coarse)').matches;
 // Simplest touch: tap the left / right half of the road to change lane, autopilot does the rest.
 $('c').addEventListener('pointerdown', (e) => {
   if (!auto) setAuto(true);
@@ -126,7 +127,39 @@ function setAuto(on) {
   // On autopilot the player runs the same driver as the AI cars; off again, drop the lane claim others respect.
   if (on) Object.assign(st, { lane: clamp(Math.round(st.lat / LANE) + 1, 0, 2), cruise: AUTO_V, latV: 0 });
   else st.lane = null;
+  syncWake();
 }
+
+// --- Keep the screen on while autopilot drives. Off by default on phones to save battery.
+const WAKE_KEY = 'luori.wake';
+let wakeOn = (store(WAKE_KEY) ?? (COARSE ? '0' : '1')) === '1', lock = null;
+function syncWake() {
+  $('wake').setAttribute('aria-pressed', wakeOn);
+  const want = wakeOn && auto && !document.hidden;
+  if (want && !lock) lock = navigator.wakeLock?.request('screen').catch(() => (lock = null));
+  if (!want && lock) {
+    lock.then((l) => l?.release());
+    lock = null;
+  }
+}
+$('wake').hidden = !navigator.wakeLock;
+$('wake').addEventListener('click', () => {
+  wakeOn = !wakeOn;
+  store(WAKE_KEY, wakeOn ? '1' : '0');
+  syncWake();
+});
+// The browser drops the lock whenever the page is hidden; take it again on return.
+document.addEventListener('visibilitychange', () => {
+  lock = null;
+  syncWake();
+});
+
+// --- Fullscreen (not offered where the API is missing, e.g. iPhone Safari, or already full screen as a PWA).
+$('fs').hidden = PWA || !document.fullscreenEnabled;
+$('fs').addEventListener('click', () =>
+  (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().then(() => screen.orientation?.lock?.('landscape'))).catch(() => {}),
+);
+document.addEventListener('fullscreenchange', () => $('fs').setAttribute('aria-pressed', !!document.fullscreenElement));
 const AUTO_KEY = 'luori.auto';
 $('auto').addEventListener('click', () => {
   setAuto(!auto);
@@ -168,7 +201,6 @@ document.addEventListener('visibilitychange', () => started && soundOn && !docum
 
 // --- Screenshot: render then read the canvas in the same task (toBlob copies it right away),
 // so no preserveDrawingBuffer cost on every frame. Phones get the share sheet ("Save image"), desktops a download.
-const COARSE = matchMedia('(pointer: coarse)').matches;
 $('shot').addEventListener('click', () => {
   renderer.render(scene, camera);
   renderer.domElement.toBlob((blob) => {

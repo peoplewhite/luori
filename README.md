@@ -13,6 +13,8 @@ No HUD on screen, just small icons top-right that fade after a few idle seconds.
 
 The camera icon saves the current frame as a PNG (share sheet on phones, so it can go to Photos; a download on desktop). Icons aren't in the picture.
 
+The cup icon keeps the screen awake (Screen Wake Lock) while autopilot drives: on by default on desktop, off by default on phones to save battery; the choice is remembered. The fullscreen icon is hidden where the Fullscreen API is missing (iPhone Safari) and in the installed PWA, which is already full screen.
+
 Sound is generated with Web Audio, no audio files: an engine hum and wind that follow the speed, plus crickets at night. The speaker icon mutes it (remembered).
 
 Installed as a PWA (home screen), the touch buttons are hidden and autopilot is on by default unless the autopilot icon was switched off before; lane taps still work and a physical keyboard still takes over.
